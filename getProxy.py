@@ -77,7 +77,7 @@ def check_and_save_proxies(check_url, proxies, output_file):
     for t in checker_pool:
         t.join()
 
-def get_proxy():
+def start_get_proxy():
     input_file, output_file, check_url = '', 'proxies.txt', IP138
     start = datetime.datetime.now()
     proxies = open(input_file, 'r').readlines() if input_file else get_proxies_set()
