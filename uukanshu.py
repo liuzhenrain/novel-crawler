@@ -1,8 +1,5 @@
-from requests import Response
-import os, io
 from bs4 import BeautifulSoup
-import threading
-import re, time
+import re
 
 SITE = "https://www.uukanshu.com/"
 

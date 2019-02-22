@@ -139,7 +139,7 @@ if __name__ == "__main__":
     if url.netloc in novel_netloc:
         netloc_index = novel_netloc.index(url.netloc)
     else:
-        print("此工具暂时不支持 悠悠看书 [www.uukanshu.com],笔趣阁[www.qu.la]以外的网站")
+        print("此工具暂时不支持 悠悠看书[www.uukanshu.com],笔趣阁[www.qu.la] 以外的网站")
         exit(0)
     if not os.path.exists('proxies.txt'):
         print("开始更新代理信息")
