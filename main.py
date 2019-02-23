@@ -4,6 +4,7 @@ import uukanshu
 import requests
 import urllib.parse
 import threading
+import random
 
 req_header = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
@@ -13,6 +14,7 @@ req_header = {
     'DNT': '1',
     'Upgrade-Insecure-Requests': '1',
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.110 Safari/537.36',
+    'Referer': 'https://www.google.com/',
 }
 
 novel_netloc = [
@@ -30,30 +32,48 @@ PROXIES = []
 proxy_file = "proxies.txt"
 novel_title = ""
 MAX_THREAD_COUNT = 30
+used_proxy = []
+mylock = threading.RLock()
 
 
 def get_content_thread(chapter_index, c_title: str, url: str, callback):
+    global used_proxy
+    global PROXIES
     base_url = novel_location[netloc_index]
     abs_path = urllib.parse.urljoin(base_url, url)
-    proxy = PROXIES.pop().strip()
-    print("小说 {0} 章节 《 {1} 》正在下载\n".format(novel_title, c_title))
-    r = requests.get(abs_path, proxies={"http": proxy})
-    if r.ok:
-        PROXIES.append(proxy)
-        if netloc_index == 0:
-            text = uukanshu.parse_content(r.text)
-            print("小说 {0} 《 {1} 》下载完成\n".format(novel_title, c_title))
-        elif netloc_index == 1:
-            pass
+    mylock.acquire()
+    if len(PROXIES) > 0:
+        randIndex = random.randint(0, len(PROXIES)-1)
+        proxy = PROXIES.pop(randIndex).strip()
+    elif len(used_proxy) > 0:
+        proxy = used_proxy[random.randint(0, len(used_proxy)-1)]
+    mylock.release()
+    print("小说 {0} 章节 《 {1} 》正在下载\n".format(novel_title, c_title), " Proxy->" + proxy)
+    try:
+        r = requests.get(abs_path, proxies={"http": proxy, "https": proxy}, headers=req_header)
+        if r.ok:
+            # PROXIES.insert(0, proxy)
+            used_proxy.append(proxy)
+            if netloc_index == 0:
+                text = uukanshu.parse_content(r.text)
+                print("小说 {0} 《 {1} 》下载完成\n".format(novel_title, c_title))
+            elif netloc_index == 1:
+                pass
 
-        data = {
-            'title': c_title,
-            'content': text
-        }
-        callback(chapter_index, data)
-    else:
-        print("小说 {0} 章节 《 {1} 》下载失败，重新开始\n".format(novel_title, c_title))
-        get_content_thread(url)
+            data = {
+                'title': c_title,
+                'content': text
+            }
+            callback(chapter_index, data)
+        else:
+            time.sleep(1)
+            print("小说 {0} 章节 《 {1} 》下载失败，重新开始\n".format(novel_title, c_title))
+            get_content_thread(chapter_index, c_title, url, callback)
+    except:
+        time.sleep(1)
+        print("小说 {0} 章节 《 {1} 》网络错误，重新开始\n".format(novel_title, c_title))
+        get_content_thread(chapter_index, c_title, url, callback)
+
 
 
 def save_novel(n_name: str, content_list: {}):
@@ -68,11 +88,11 @@ def save_novel(n_name: str, content_list: {}):
             fp.write((c_title + "\r\n").encode("UTF-8"))
             fp.write((data['content'] + "\r\n").encode("UTF-8"))
     fp.close()
+    print("下载完成")
+    exit(0)
 
 
 def get_novel_text(chapter_list: []):
-    global PROXIES
-    PROXIES = open(proxy_file, "r").readlines()
     content_pool = []
 
     novel_content_list = {}
@@ -86,8 +106,10 @@ def get_novel_text(chapter_list: []):
         chapter_dic[str(i)] = chapter_list[i]
 
     def get_charpter():
-        if (len(chapter_dic.items()) > 0):
+        mylock.acquire()
+        if len(chapter_dic.items()) > 0:
             chapter = chapter_dic.popitem()
+            mylock.release()
             chapter_index = int(chapter[0])
             href = chapter[1]['href']
             c_title = chapter[1].text
@@ -104,7 +126,8 @@ def get_novel_text(chapter_list: []):
             get_content_thread(chapter_index, c_title, href, save_novel_text)
             get_charpter()
         else:
-            return None
+            mylock.release()
+            return
 
     for i in range(0, MAX_THREAD_COUNT):
         t = threading.Thread(target=get_charpter)
@@ -118,7 +141,9 @@ def get_novel_text(chapter_list: []):
 
 
 def get_novel(url: str):
-    r = requests.get(url, headers=req_header)
+    global PROXIES
+    PROXIES = open(proxy_file, "r").readlines()
+    r = requests.get(url, headers=req_header, proxies={"http": "http://186.249.213.23:36586"})
     if r.status_code == requests.codes.get('ok'):
         if netloc_index == 0:  # 悠悠看书
             global novel_title
